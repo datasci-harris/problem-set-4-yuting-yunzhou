@@ -41,13 +41,95 @@ Please refer to the minilesson on code style
 
 **Important:** Repositories are for tracking code. **Do not commit the data or shapefiles to your repo.** The best way to do this is with `.gitignore`, which we have covered in class. If you do accidentally commit the data, Github has a [guide](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github#removing-files-from-a-repositorys-history). The best course of action depends on whether you have pushed yet. This also means that both partners will have to download the initial raw data and any data cleaning code will need to be re-run on both partners' computers. 
 
+```{python}
+import geopandas as gpd
+```
+
 ## Download and explore the Provider of Services (POS) file (10 pts)
 
 1. 
+
+```{python}
+import pandas as pd
+pos2016 = pd.read_csv("POS_File_Hospital_Non_Hospital_Facilities_Q4_2016.csv")
+print (pos2016.head())
+print(pos2016.columns)
+```
+
+The variables that I pulled are provider type code, provider subtype code, city name, facility name, provider number, state code, zip code.
+
+# Count the number of short-term hospitals
+
 2. 
     a.
-    b.
+    ```{python}
+    import pandas as pd
+    short_term_hospitals = pos2016[(pos2016['PRVDR_CTGRY_CD'] == 1) & (pos2016['PRVDR_CTGRY_SBTYP_CD'] == 1)]
+    num_hospitals = len(short_term_hospitals)
+    print(f"Number of short-term hospitals in 2016: {num_hospitals}")
+
+    ```
+
+    b.I used the American Hospital Association (AHA), which provides comprehensive statistics on U.S. hospitals. According to the AHA's "Fast Facts on U.S. Hospitals" for 2018, there were 5,534 registered hospitals in the U.S. in 2016.
+
+    link: https://www.aha.org/system/files/2018-02/2018-aha-hospital-fast-facts.pdf
+
+    
 3. 
+
+```{python}
+file_names = [
+    "POS_File_Hospital_Non_Hospital_Facilities_Q4_2016.csv",
+    "POS_File_Hospital_Non_Hospital_Facilities_Q4_2017.csv",
+    "POS_File_Hospital_Non_Hospital_Facilities_Q4_2018.csv",
+    "POS_File_Hospital_Non_Hospital_Facilities_Q4_2019.csv"
+]
+years = [2016, 2017, 2018, 2019]
+pos_data = []
+
+for year, file in zip(years, file_names):
+    try:
+        pos_year = pd.read_csv(file, encoding='ISO-8859-1')
+        
+        short_term = pos_year[(pos_year['PRVDR_CTGRY_CD'] == 1) & 
+                              (pos_year['PRVDR_CTGRY_SBTYP_CD'] == 1)]
+        
+        short_term['Year'] = year
+        
+        pos_data.append(short_term)
+    
+    except UnicodeDecodeError as e:
+        print(f"Could not read {file} due to encoding issues: {e}")
+
+pos_all = pd.concat(pos_data, ignore_index=True)
+print(pos_all.head())
+```
+
+```{python}
+import altair as alt
+
+hospital_counts_by_year = pos_all.groupby('Year').size().reset_index(name='Count')
+
+chart = alt.Chart(hospital_counts_by_year).mark_bar(size=15).encode(
+    x=alt.X('Year:O', title='Year'), 
+    y=alt.Y('Count:Q', title='Number of Observations'), 
+    tooltip=['Year', 'Count']  
+).properties(
+    width=170,
+    title="Number of Short-Term Hospitals by Year (2016–2019)"
+)
+
+text = chart.mark_text(
+    align='center',
+    baseline='bottom',
+    dy=-5  
+).encode(
+    text='Count:Q'
+)
+
+chart+text
+```
+
 4. 
     a.
     b.
