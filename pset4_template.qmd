@@ -126,7 +126,7 @@ text = chart.mark_text(
 ).encode(
     text='Count:Q'
 )
-
+  
 chart+text
 ```
 
@@ -136,9 +136,64 @@ chart+text
 
 ## Identify hospital closures in POS file (15 pts) (*)
 
-1. 
-2. 
-3. 
+1.  
+```{python}
+import pandas as pd
+
+pos2016 = pd.read_csv("POS_File_Hospital_Non_Hospital_Facilities_Q4_2016.csv", encoding='latin1')
+pos2017 = pd.read_csv("POS_File_Hospital_Non_Hospital_Facilities_Q4_2017.csv", encoding='latin1')
+pos2018 = pd.read_csv("POS_File_Hospital_Non_Hospital_Facilities_Q4_2018.csv", encoding='latin1')
+pos2019 = pd.read_csv("POS_File_Hospital_Non_Hospital_Facilities_Q4_2019.csv", encoding='latin1')
+
+print("Columns in 2016 data:", pos2016.columns.tolist())
+
+active_2016 = pos2016[pos2016['Termination_Code'] == 'Active']
+
+def find_closures(active_df, *args):
+ 
+    closures = active_df[['Facility_Name', 'Zip_Code', 'CMS_Certification_Number']].copy()
+    closures['Suspected_Closure_Year'] = None
+
+    
+    for year, df in enumerate(args, start=2017):
+        
+        closures.loc[~closures['CMS_Certification_Number'].isin(df['CMS_Certification_Number']), 'Suspected_Closure_Year'] = year
+        
+    
+    return closures.dropna(subset=['Suspected_Closure_Year'])
+
+suspected_closures = find_closures(active_2016, pos2017, pos2018, pos2019)
+
+
+print("Total suspected closures:", len(suspected_closures))
+print(suspected_closures.sort_values('Facility_Name').head(10))
+```
+
+2.   
+```{python}
+print(suspected_closures.sort_values('Facility_Name').head(10))
+```
+
+3.  
+```{python}
+zip_counts_2016 = pos2016[pos2016['Termination_Code'] == 'Active'].groupby('Zip_Code').size()
+zip_counts_2017 = pos2017[pos2017['Termination_Code'] == 'Active'].groupby('Zip_Code').size()
+zip_counts_2018 = pos2018[pos2018['Termination_Code'] == 'Active'].groupby('Zip_Code').size()
+zip_counts_2019 = pos2019[pos2019['Termination_Code'] == 'Active'].groupby('Zip_Code').size()
+
+suspected_closures['is_merger'] = suspected_closures.apply(
+    lambda row: (
+        zip_counts_2016.get(row['Zip_Code'], 0) == zip_counts_2017.get(row['Zip_Code'], 0) or
+        zip_counts_2017.get(row['Zip_Code'], 0) == zip_counts_2018.get(row['Zip_Code'], 0) or
+        zip_counts_2018.get(row['Zip_Code'], 0) == zip_counts_2019.get(row['Zip_Code'], 0)
+    ), axis=1
+)
+
+filtered_closures = suspected_closures[~suspected_closures['is_merger']]
+print("Total closures after filtering mergers:", len(filtered_closures))
+print(filtered_closures.sort_values('Facility_Name').head(10))
+
+```
     a.
     b.
     c.
@@ -152,13 +207,77 @@ chart+text
 
 ## Calculate zip code’s distance to the nearest hospital (20 pts) (*)
 
-1. 
-2. 
-3. 
-4. 
+1.  
+```{python}
+import geopandas as gpd
+
+zip_shapefile = gpd.read_file("gz_2010_us_860_00_500k.shp")
+
+zips_all_centroids = zip_shapefile.copy()
+zips_all_centroids['centroid'] = zips_all_centroids.geometry.centroid
+
+print("Dimensions of zips_all_centroids:", zips_all_centroids.shape)
+print("Columns in zips_all_centroids:", zips_all_centroids.columns.tolist())
+
+```
+
+2.   
+```{python}
+zips_texas_centroids = zips_all_centroids[zips_all_centroids['ZIP_CODE'].str.startswith(('75', '76'))]
+
+bordering_state_prefixes = ('75', '76', '77', '78')  
+zips_texas_borderstates_centroids = zips_all_centroids[zips_all_centroids['ZIP_CODE'].str.startswith(bordering_state_prefixes)]
+
+print("Number of Texas zip codes:", len(zips_texas_centroids))
+print("Number of Texas and border states zip codes:", len(zips_texas_borderstates_centroids))
+
+```
+
+3.  
+```{python}
+hospitals_2016 = pos2016[['ZIP_CODE']].drop_duplicates()
+zips_withhospital_centroids = zips_texas_borderstates_centroids.merge(
+    hospitals_2016, on='ZIP_CODE', how='inner'
+)
+
+print("Number of zip codes with at least one hospital:", len(zips_withhospital_centroids))
+```
+
+4.   
+```{python}
+from shapely.ops import nearest_points
+
+def calculate_nearest_hospital(zip_df, hospital_df):
+    distances = []
+    for zip_centroid in zip_df['centroid']:
+        nearest_hospital = nearest_points(zip_centroid, hospital_df.unary_union)[1]
+        distance = zip_centroid.distance(nearest_hospital)
+        distances.append(distance)
+    return distances
+
+subset_distances = calculate_nearest_hospital(zips_texas_centroids.head(10), zips_withhospital_centroids)
+print("Distance for 10 zip codes:", subset_distances)
+
+zips_texas_centroids['distance_to_nearest_hospital'] = calculate_nearest_hospital(zips_texas_centroids, zips_withhospital_centroids)
+
+```
     a.
     b.
-5. 
+5.   
+```{python}
+zips_texas_centroids['distance_to_nearest_hospital_miles'] = zips_texas_centroids['distance_to_nearest_hospital'] * 0.000621371
+
+average_distance = zips_texas_centroids['distance_to_nearest_hospital_miles'].mean()
+print(f"Average distance to nearest hospital (in miles): {average_distance}")
+
+import matplotlib.pyplot as plt
+
+zips_texas_centroids.plot(column='distance_to_nearest_hospital_miles', cmap='coolwarm', legend=True)
+plt.title("Distance to Nearest Hospital by Zip Code in Texas")
+plt.show()
+
+```
+
     a.
     b.
     c.
