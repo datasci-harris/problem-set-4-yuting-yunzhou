@@ -140,63 +140,59 @@ chart+text
 ```{python}
 import pandas as pd
 
-pos2016 = pd.read_csv("POS_File_Hospital_Non_Hospital_Facilities_Q4_2016.csv", encoding='latin1')
-pos2017 = pd.read_csv("POS_File_Hospital_Non_Hospital_Facilities_Q4_2017.csv", encoding='latin1')
-pos2018 = pd.read_csv("POS_File_Hospital_Non_Hospital_Facilities_Q4_2018.csv", encoding='latin1')
-pos2019 = pd.read_csv("POS_File_Hospital_Non_Hospital_Facilities_Q4_2019.csv", encoding='latin1')
+pos2016 = pd.read_csv("POS_File_Hospital_Non_Hospital_Facilities_Q4_2016.csv", encoding="ISO-8859-1")
+pos2017 = pd.read_csv("POS_File_Hospital_Non_Hospital_Facilities_Q4_2017.csv", encoding="ISO-8859-1")
+pos2018 = pd.read_csv("POS_File_Hospital_Non_Hospital_Facilities_Q4_2018.csv", encoding="ISO-8859-1")
+pos2019 = pd.read_csv("POS_File_Hospital_Non_Hospital_Facilities_Q4_2019.csv", encoding="ISO-8859-1")
 
 print("Columns in 2016 data:", pos2016.columns.tolist())
 
-active_2016 = pos2016[pos2016['Termination_Code'] == 'Active']
+active_2016 = pos2016[['FAC_NAME', 'ZIP_CD', 'PRVDR_NUM']].copy()
 
 def find_closures(active_df, *args):
- 
-    closures = active_df[['Facility_Name', 'Zip_Code', 'CMS_Certification_Number']].copy()
+    closures = active_df.copy()
     closures['Suspected_Closure_Year'] = None
 
-    
     for year, df in enumerate(args, start=2017):
-        
-        closures.loc[~closures['CMS_Certification_Number'].isin(df['CMS_Certification_Number']), 'Suspected_Closure_Year'] = year
-        
-    
+        closures.loc[~closures['PRVDR_NUM'].isin(df['PRVDR_NUM']), 'Suspected_Closure_Year'] = year
+
     return closures.dropna(subset=['Suspected_Closure_Year'])
 
 suspected_closures = find_closures(active_2016, pos2017, pos2018, pos2019)
 
-
 print("Total suspected closures:", len(suspected_closures))
-print(suspected_closures.sort_values('Facility_Name').head(10))
+print(suspected_closures.sort_values('FAC_NAME').head(10))
 ```
+There are 3 hospitals that fir this definition.
 
 2.   
 ```{python}
-print(suspected_closures.sort_values('Facility_Name').head(10))
+print(suspected_closures.sort_values('FAC_NAME')[['FAC_NAME', 'Suspected_Closure_Year']].head(10))
 ```
 
 3.  
 ```{python}
-zip_counts_2016 = pos2016[pos2016['Termination_Code'] == 'Active'].groupby('Zip_Code').size()
-zip_counts_2017 = pos2017[pos2017['Termination_Code'] == 'Active'].groupby('Zip_Code').size()
-zip_counts_2018 = pos2018[pos2018['Termination_Code'] == 'Active'].groupby('Zip_Code').size()
-zip_counts_2019 = pos2019[pos2019['Termination_Code'] == 'Active'].groupby('Zip_Code').size()
+zip_counts_2016 = pos2016.groupby('ZIP_CD').size()
+zip_counts_2017 = pos2017.groupby('ZIP_CD').size()
+zip_counts_2018 = pos2018.groupby('ZIP_CD').size()
+zip_counts_2019 = pos2019.groupby('ZIP_CD').size()
 
 suspected_closures['is_merger'] = suspected_closures.apply(
     lambda row: (
-        zip_counts_2016.get(row['Zip_Code'], 0) == zip_counts_2017.get(row['Zip_Code'], 0) or
-        zip_counts_2017.get(row['Zip_Code'], 0) == zip_counts_2018.get(row['Zip_Code'], 0) or
-        zip_counts_2018.get(row['Zip_Code'], 0) == zip_counts_2019.get(row['Zip_Code'], 0)
+        zip_counts_2016.get(row['ZIP_CD'], 0) == zip_counts_2017.get(row['ZIP_CD'], 0) or
+        zip_counts_2017.get(row['ZIP_CD'], 0) == zip_counts_2018.get(row['ZIP_CD'], 0) or
+        zip_counts_2018.get(row['ZIP_CD'], 0) == zip_counts_2019.get(row['ZIP_CD'], 0)
     ), axis=1
 )
 
 filtered_closures = suspected_closures[~suspected_closures['is_merger']]
-print("Total closures after filtering mergers:", len(filtered_closures))
-print(filtered_closures.sort_values('Facility_Name').head(10))
 
+print("Total closures after filtering mergers:", len(filtered_closures))
+print(filtered_closures.sort_values('FAC_NAME')[['FAC_NAME', 'ZIP_CD', 'Suspected_Closure_Year']].head(10))
 ```
-    a.
-    b.
-    c.
+    a. Among the suspected closures, how many hospitals fit this definition of potentially being a merger/acquisition?
+    b. After filtering out these potential mergers or acquisitions, 0 hospitals remain in the list of closures.
+    c. Since there are no remaining hospitals after filtering, the sorted list of corrected hospital closures is empty.
 
 ## Download Census zip code shapefile (10 pt) 
 
